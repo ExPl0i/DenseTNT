@@ -1,40 +1,40 @@
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu20.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
-# Системные зависимости + всё для сборки Cython (gcc/python-dev)
+# Система + сборка расширений (Cython) + python3.8
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 python3-pip python3-dev python-is-python3 \
+      python3.8 python3.8-dev python3.8-distutils python3-pip \
       build-essential \
       git ca-certificates \
       libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /workspace
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.8 1
 
-# Сначала зависимости (лучше для кеша)
-COPY requirements.txt /workspace/requirements.txt
+ARG REPO_URL="https://github.com/ExPl0i/DenseTNT.git"
+ARG REPO_BRANCH="argoverse2"
+
+WORKDIR /workspace
+RUN git clone --depth 1 --branch "${REPO_BRANCH}" "${REPO_URL}" /workspace/DenseTNT
+
+WORKDIR /workspace/DenseTNT
 
 RUN python -m pip install --upgrade pip setuptools wheel && \
-    # зависимости DenseTNT
     python -m pip install -r requirements.txt && \
-    # PyTorch под CUDA 11.8
-    python -m pip install --upgrade \
+    # PyTorch CUDA 11.8
+    python -m pip install \
       torch==2.0.0 torchvision==0.15.1 torchaudio==2.0.1 \
       --index-url https://download.pytorch.org/whl/cu118 && \
-    # Argoverse 2 API (из инструкции репозитория)
+    # Argoverse2 API (как в README)
     python -m pip install av2
 
-# Теперь код
-COPY . /workspace
-
-# Сборка Cython расширения (из инструкции репозитория)
+# Компиляция Cython (как в README)
 RUN cd src && \
     cython -a utils_cython.pyx && \
-    python setup.py build_ext --inplace && \
-    cd /workspace
+    python setup.py build_ext --inplace
 
 CMD ["bash"]
